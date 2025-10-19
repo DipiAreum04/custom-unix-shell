@@ -10,7 +10,7 @@
 #include <sys/fcntl.h>
 #include "parser.h"
 
-int execute_command(char* cmd, char** args, int bg);
+int execute_command(char* cmd, char** args, char* in, char* out, int bg);
 
 int execute(struct cmdline *l);
 

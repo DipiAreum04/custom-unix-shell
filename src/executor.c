@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/fcntl.h>
-#include <sys/wait.h>
+#include <sys/fcntl.h>  // for pid_t, open() function flags etc.
+#include <sys/wait.h>  // for wait() and waitpid()
 #include <string.h>
 
 #include "executor.h"
@@ -84,16 +84,50 @@ void list_jobs() {
 }
 
 
-int execute_command(char* cmd, char** args, int bg) {
+int execute_command(char* cmd, char** args, char* in, char* out, int bg) {
     
     pid_t pid = fork();
+
     if (pid < 0) {
 		// fork failed
 		perror("fork failed");
 		return EXIT_FAILURE;
     }
+
     else if(pid == 0) {
 		// child process
+
+        int fd_in, fd_out;
+
+        // Input redirection
+        if (in != NULL) {
+            fd_in = open(in, O_RDONLY); // opens input file in read only access mode
+            if (fd_in == -1) {
+                perror("Input redirection failed");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd_in, STDIN_FILENO); // points standard input to the input file (duplicates file descriptor)
+            close(fd_in);
+        }
+
+        // Output redirection
+        if (out != NULL) {
+            // opens output file in write only access mode and creates the file if it does not exist
+            // 0644 is the default permission settings for files
+            fd_out = open(out, O_WRONLY | O_CREAT, 0644);
+
+            if (fd_out == -1) {
+                perror("Output redirection failed");
+                exit(EXIT_FAILURE);
+            }
+            if (ftruncate(fd_out, 0) == -1) { // Erase existing file content
+                perror("Ftruncate error");
+                exit(EXIT_FAILURE);
+            } 
+
+            dup2(fd_out, STDOUT_FILENO); // points standard output to the output file
+            close(fd_out);
+        }
 
         // Replace the child process with a new program to execute the command
         execvp(cmd, args);
@@ -123,7 +157,7 @@ int execute_command(char* cmd, char** args, int bg) {
  * @param l A pointer to a cmdline structure containing the parsed command.
  * @return 0 on success, or a non-zero value on error.
  */
-int execute(struct cmdline *l){
+int execute(struct cmdline *l) {
 
     if (l->in) printf("in: %s\n", l->in);
     if (l->out) printf("out: %s\n", l->out);
@@ -144,7 +178,7 @@ int execute(struct cmdline *l){
         char** args = l->seq[i];    // Command arguments
         char* cmd = args[0];   // Command name
 
-        return execute_command(cmd, args, l->bg);
+        return execute_command(cmd, args, l->in, l->out, l->bg);
     }
 
     return EXIT_SUCCESS;
