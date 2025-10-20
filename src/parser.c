@@ -136,7 +136,7 @@ static char **split_in_words(char *line)
             break;
             default:
                 /* Another word */
-                    cur_buf = buf;
+                cur_buf = buf;
             read_word(&cur, &cur_buf);
             w = strdup(buf);
         }
