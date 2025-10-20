@@ -186,29 +186,170 @@ int execute(struct cmdline* l) {
         return execute_command(cmd, args, l->in, l->out, l->bg);
     }
 
-    // two commands (simple pipe)
-    else if (num_commands == 2) {
-        return execute_simple_pipe(l);
-    }
-
-    // three or more commands (multiple pipe)
-    else if(num_commands > 2) {
-        return execute_multipipe(l);
+    // two or more commands (single or multiple pipe)
+    else if(num_commands > 1) {
+        return execute_pipe(l, num_commands);
     }
 
     return EXIT_SUCCESS;
 }
 
 
+int execute_pipe(struct cmdline* l, int num_cmds) {
 
+    // We need to create a child process for each command
+
+    pid_t pid_child[num_cmds]; // array to store PIDs of all child process
+    int status;
+
+    int read_prev_end_fd = STDIN_FILENO; // Read end of the previous pipe
+                        // For the first command, the file descriptor is standard input
+
+    // loop through all commands
+    for (int i = 0; i < num_cmds; i++) {
+
+        int pipefd[2]; // pipefd[0] is the read end and pipefd[1] is the write end
+
+        // Create a pipe for all commands except the last one
+        if (i < num_cmds - 1) {
+            if (pipe(pipefd) == -1) {
+                perror("Pipe failed");
+                return EXIT_FAILURE;
+            }
+        }
+
+        // fork a child for each command
+        pid_child[i] = fork();
+
+        if (pid_child[i] < 0) {
+            // fork failed
+            perror("fork failed");
+            return EXIT_FAILURE;
+        }
+
+        else if (pid_child[i] == 0) {
+            // child process
+
+            // If first command - writer (child writes to the pipe)
+            if (i == 0) {
+
+                // close unused read end
+                close(pipefd[0]);
+
+                // point standard output to the write end of the pipe
+                dup2(pipefd[1], STDOUT_FILENO);
+
+                close(pipefd[1]); // close the original write-end descriptor
+                
+                // Input redirection for the first command
+                // Output redirection to file not possible since the output is already redirected to the second command through pipe
+                if (l->in != NULL) {
+                    int fd_in = open(l->in, O_RDONLY); // opens input file in read only access mode
+                    if (fd_in == -1) {
+                        perror("Input redirection failed");
+                        exit(EXIT_FAILURE);
+                    }
+                    dup2(fd_in, STDIN_FILENO); // points standard input to the input file (duplicates file descriptor)
+                    close(fd_in);
+                }
+
+            }
+
+            // Last command - reader (child reads from the pipe)
+            else if (i == num_cmds - 1) {
+
+                // point standard input to the read end of the previous pipe
+                dup2(read_prev_end_fd, STDIN_FILENO);
+
+                close(read_prev_end_fd); // close the original read-end descriptor
+
+                // Output redirection for the last command
+                // Input redirection to file not possible since the input is already connected to the previous command through pipe
+                if (l->out != NULL) {
+
+                    // opens output file in write only access mode and creates the file if it does not exist
+                    // 0644 is the default permission settings for creating files
+                    int fd_out = open(l->out, O_WRONLY | O_CREAT, 0644);
+
+                    if (fd_out == -1) {
+                        perror("Output redirection failed");
+                        exit(EXIT_FAILURE);
+                    }
+                    if (ftruncate(fd_out, 0) == -1) { // Erase existing file content
+                        perror("Ftruncate error");
+                        exit(EXIT_FAILURE);
+                    } 
+
+                    dup2(fd_out, STDOUT_FILENO); // points standard output to the output file
+                    close(fd_out);
+                }
+
+            }
+
+            // Middle commands if exist - reader and writer (both reads and writes to the pipe)
+            else {
+
+                // input
+                // point standard input to the read end of the previous pipe
+                dup2(read_prev_end_fd, STDIN_FILENO);
+                // close the original read-end descriptor
+                close(read_prev_end_fd);
+
+                // output
+                // point standard output to the write end of the pipe
+                dup2(pipefd[1], STDOUT_FILENO);
+                // close both read and write ends of the pipe
+                close(pipefd[0]);
+                close(pipefd[1]);
+
+            }
+
+            // Execute each command in the pipeline
+            execvp(l->seq[i][0], l->seq[i]);
+
+            // If execvp returns, an error occurred
+            perror("execvp failed");
+            exit(EXIT_FAILURE);
+        }
+
+        // Parent process (inside loop) - for each child/command
+
+        // close the read end of previous pipe if it was not standard input (if it was not the first command)
+        if (read_prev_end_fd != STDIN_FILENO) {
+            close(read_prev_end_fd);
+        }
+
+        // Save the read end of pipe for the next child except for the last process
+        if (i < num_cmds - 1) {
+            close(pipefd[1]); // Close the write end of parent
+            read_prev_end_fd = pipefd[0]; // Save the read end for the next child
+        }
+
+        // add process to job list if background execution required
+        if(l->bg == 1) {
+            add_job(pid_child[i], l->seq[i][0]);
+        }
+
+    }
+
+    // Parent process (outside loop)
+    // If foreground execution required
+    if(l->bg == 0) {
+        for(int i = 0; i < num_cmds; i++) {
+            waitpid(pid_child[i], &status, 0);
+        }
+    }
+    return EXIT_SUCCESS;
+}
+
+/*
 int execute_simple_pipe(struct cmdline* l) {
 
-    int pipefd[2];
+    int pipefd[2]; // pipefd[0] is the read end and pipefd[1] is the write end
     pid_t pid_child1, pid_child2;
     int status;
 
     // Create a pipe
-    // pipefd[0] is the read end and pipefd[1] is the write end
     if (pipe(pipefd) == -1) {
         perror("Pipe failed");
         return EXIT_FAILURE;
@@ -322,3 +463,4 @@ int execute_simple_pipe(struct cmdline* l) {
 
     return EXIT_SUCCESS;
 }
+*/

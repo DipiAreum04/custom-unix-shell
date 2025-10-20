@@ -12,7 +12,9 @@
 
 int execute_command(char* cmd, char** args, char* in, char* out, int bg);
 
-int execute_simple_pipe(struct cmdline* l);
+// int execute_simple_pipe(struct cmdline* l);
+
+int execute_pipe(struct cmdline* l, int num_cmds);
 
 int execute(struct cmdline* l);
 
