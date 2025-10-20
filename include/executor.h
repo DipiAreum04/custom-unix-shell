@@ -12,7 +12,9 @@
 
 int execute_command(char* cmd, char** args, char* in, char* out, int bg);
 
-int execute(struct cmdline *l);
+int execute_simple_pipe(struct cmdline* l);
+
+int execute(struct cmdline* l);
 
 // Struct Job to track background processes
 struct job {
@@ -23,6 +25,6 @@ struct job {
 };
 
 // Job management functions
-int add_job(pid_t pid, const char* cmd);
+void add_job(pid_t pid, const char* cmd);
 void update_job_states();
 void list_jobs();
