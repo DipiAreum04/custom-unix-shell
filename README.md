@@ -43,7 +43,7 @@ Bob
 Charlie
 ```
  
-**Run in the background, then check on it**
+**Run a process in the background and check background processes**
 ```bash
 $ sleep 60 &
 $ jobs
