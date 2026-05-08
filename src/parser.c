@@ -1,10 +1,8 @@
 //
 // Created by Paula on 2024-07-27.
 //
-
 #include "parser.h"
 #include "utils.h"
-
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>

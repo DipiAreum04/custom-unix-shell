@@ -1,9 +1,7 @@
 //
 // Created by Paula on 2024-07-27.
 //
-
 #include "utils.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
